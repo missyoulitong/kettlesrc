@@ -1,0 +1,755 @@
+<project name="Kettle" default="default" basedir=".">
+
+	  <description>
+	      Kettle build file
+	  </description>
+
+	  <tstamp prefix="start"/>
+	
+        <tstamp>
+           <format property="compile.timestamp" pattern="yyyy-MM-dd HH.mm.ss" />
+        </tstamp>
+
+        <!-- Look for user-override properties file first -->        
+		<property file="override.properties"/>
+	    <!-- version properites -->
+	    <property file="build-res/version.properties" />
+        <!-- set global properties for this build -->
+		<property file="build.properties"/>
+		  
+	  <target name="init" description="create timestamp and directories">
+    	<echo>Init...</echo>
+	  	
+	    <tstamp/>
+	    <mkdir dir="${build}"/>
+	    <mkdir dir="${classes}"/>
+	    <mkdir dir="${classes}/META-INF"/>
+	    <mkdir dir="${classes-ui}"/>
+	    <mkdir dir="${classes-ui}/ui"/>
+	  	<mkdir dir="${testClasses}"/>
+	    <mkdir dir="${lib}"/>
+		<mkdir dir="${distrib}"/>
+	  	<mkdir dir="${macdistrib}"/>
+		<mkdir dir="${docs}"/>
+		<mkdir dir="${api}"/>
+		<mkdir dir="${webstart}"/>
+		<mkdir dir="${junit}"/>
+	  	
+	  	<!-- used by the nightly build. we can build zips directly to this location -->
+	  	<mkdir dir="${dist.dir}"/>
+	  </target>
+
+	  <!--
+	       ==========================
+	            Compile the code
+	       ==========================
+	  -->
+
+	  <target name="compile" depends="init" description="compile the source " >
+	  	<echo>Compiling Kettle...</echo>
+	    <javac 
+	    	   destdir="${classes}"
+	    	   target="5"
+	    	   source="5"
+	           deprecation="true"
+	    	   debug="${debug}"
+               optimize="${optimize}"
+	    	>
+	    	<src path="${src}"/>
+	    	
+	    	<classpath id="cp-kettle">
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="common.jar"/>
+		  		</classpath>
+	    </javac>
+	  </target>
+	  
+	  <target name="compile-ui" depends="kettle" description="compile the UI source " >
+	  	<echo>Compiling Kettle UI...</echo>
+	    <javac 
+	    	   destdir="${classes-ui}"
+	    	   target="5"
+	    	   source="5"
+	           deprecation="true"
+	    	   debug="${debug}"
+               optimize="${optimize}"
+	    	   excludes="be/ibridge/kettle/schema/**/* be/ibridge/kettle/menu/**/*"
+	    	   memorymaximumsize="256M"
+	    	   fork="true"
+	    	>
+	    	<src path="${src-ui}"/>
+	    	
+	    	<classpath id="cp-kettle-ui">
+				<fileset dir="${lib}" 			includes="kettle-engine-3.0.jar"/>
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libswt}/win32/" includes="*.jar *.zip"/>
+		  		</classpath>
+	    </javac>
+	    <copy todir="${classes-ui}">
+	    	<fileset dir="${src-ui}" includes="**/*.png **/*.xml **/*properties"/>
+	  	    </copy>
+        <!-- embedd the UI definition files in the jar so that webstart will work -->
+	    <copy todir="${classes-ui}/ui">
+	    	<fileset dir="${ui}" includes="**/*.png **/*.xml menus.xul menubar.xul **/*.properties"/>
+	  	    </copy>
+	  </target>
+	  
+		  <!--
+		       ===================================
+		          Increase the revision number
+		       ===================================
+		  -->
+	  	
+		<target name="revision" depends="compile" description="compile the source " >
+	 	  <echo>Bumping revision...</echo>
+	  	  <java classname="org.pentaho.di.version.UpdateBuildVersion"
+		  	    classpath="${classes}"
+	  	  	  />
+		 <!-- <concat><filelist dir="." files="build_version.txt"/></concat> -->
+	    </target>
+	
+		<!--
+		       ==========================
+		          Compile the test code
+		       ==========================
+		  -->
+
+		  <target name="compileTests" depends="kettle" description="compile the tests" >
+		  	<echo>Compiling Kettle tests...</echo>
+		    <javac srcdir="${test}" 
+		    	   destdir="${testClasses}"
+		    	   target="5"
+		    	   source="5"
+		           deprecation="true"
+		    	>
+
+		    	<classpath id="cp-kettle-test">
+		    		<fileset dir="${lib}" 	  		includes="kettle-engine-3.0.jar"/>
+		    		<fileset dir="${testlibext}" 	includes="*.jar"/>
+		    		<fileset dir="${libext}/commons" 	includes="*.jar"/>
+		    		<fileset dir="${libext}" 	    includes="log4j-1.2.8.jar"/>
+				    <fileset dir="${libswt}" 		includes="common.jar"/>
+			  	</classpath>
+		    </javac>
+		  </target>
+	
+	  <!--
+	       ==========================
+	          Copy additional files
+	       ==========================
+	  -->
+
+	  <target name="copy" depends="compile" description="copy images etc to classes directory" >
+	  	<echo>Copying images etc to classes directory...</echo>
+	    <copy todir="${classes}">
+	    	<fileset dir="${src}" includes="**/*.xml **/*properties"/>
+	  	    </copy>
+	    <copy todir="${classes}">
+	    	<fileset file="${version.file}"/>
+	  	    </copy>
+	    <copy todir="${classes}/META-INF">
+	    	<fileset file="${src}/kettle-partition-plugins.xml"/>
+	  	    </copy>
+	  	
+	  </target>
+	
+	
+	  <!--
+	       ==========================
+	         javadoc of the source
+	       ==========================
+	  -->
+
+	  <target name="javadoc" depends="compile" description="compile the javadoc api" >
+	  	<echo>Compiling the Kettle API javadocs...</echo>
+        <javadoc 
+        	destdir="${api}" 
+        	access="public" 
+        	source="1.4" 
+        	use="true" 
+        	notree="false" 
+        	nonavbar="false" 
+        	noindex="false" 
+        	splitindex="true" 
+        	author="true" 
+        	version="true" 
+        	maxmemory="256M"
+        	nodeprecatedlist="false" 
+        	nodeprecated="false" 
+        	packagenames ="org.pentaho.di.*" 
+        	sourcepath="${src}" 
+        	doctitle="Kettle API documentation">
+            <link href="http://java.sun.com/j2se/1.4.2/docs/api/"/>
+
+        	<classpath refid="cp-kettle"/>
+
+        </javadoc>
+	  </target>
+	
+	  <target name="javadoc_zip" depends="javadoc" description="generate a zip file containing the Kettle javadoc">
+	  	<echo>Generating the Kettle javadoc zip file ...</echo>
+	  	<jar jarfile="${dist.dir}/Kettle-javadoc-${version}.zip" 
+	    	 basedir="${api}" 
+	    	 includes="**/*"
+	  	     excludes="**/Thumbs.db"
+	  		/>
+	  </target>
+
+	
+	  <!--
+	       ==========================
+	             Kettle library
+	       ==========================
+	  -->
+		
+	  <target name="kettle" depends="compile, revision, copy" description="generate the kettle library kettle-engine-3.0.jar">
+	  	<echo>Generating the Kettle library kettle-engine-3.0.jar ...</echo>
+	  	<jar jarfile="${lib}/kettle-engine-3.0.jar" 
+	    	 basedir="${classes}" 
+	    	 includes="**/* ${version.file.path}"
+	  	     excludes="**/Thumbs.db **/kettle.jar **/derbyOld/* **/derbyNew/*"
+	  		>
+                <manifest>
+                    <attribute name="Implementation-Title" value="${impl.title.engine}" />
+                    <attribute name="Implementation-Version" value="${impl.version}" />
+                    <attribute name="Implementation-Vendor" value="${impl.vendor}" />
+    				<attribute name="Implementation-ProductID" value="${impl.productID}" />
+                    <attribute name="Compile-Timestamp" value="${compile.timestamp}" />
+                </manifest>
+        </jar>
+	  	
+
+	  </target>	
+
+	  <target name="kettle-ui" depends="compile-ui" description="generate the kettle library kettle-ui-swt-3.0.jar">
+	  	<echo>Generating the Kettle library kettle-ui-swt-3.0.jar ...</echo>
+	  	<jar jarfile="${lib}/kettle-ui-swt-3.0.jar" 
+	    	 basedir="${classes-ui}" 
+	    	 includes="**/* ${version.file.path}"
+	  	     excludes="**/Thumbs.db **/kettle.jar">
+                <manifest>
+                    <attribute name="Implementation-Title" value="${impl.title.ui}" />
+                    <attribute name="Implementation-Version" value="${impl.version}" />
+                    <attribute name="Implementation-Vendor" value="${impl.vendor}" />
+    				<attribute name="Implementation-ProductID" value="${impl.productID}" />
+                    <attribute name="Compile-Timestamp" value="${compile.timestamp}" />
+                </manifest>
+	  	</jar>
+
+	  </target>	
+
+	<!--
+	       ==========================
+	        Distribution jar package
+	       ==========================
+	  -->
+	  <target name="distrib" depends="kettle, kettle-ui" description="copy jar file to distribution directory" >
+	  	<echo>Construct the distribution package...</echo>
+	  	
+	        <!-- root directory -->
+	  		<mkdir dir="${distrib}"/>
+	  		<copy todir="${distrib}">
+	  			<fileset dir="${bin}" includes="**/*" excludes="**/.vpn .project .classpath"/>
+	  			</copy>
+
+	  		<!-- base lib -->
+	  		<mkdir dir="${distrib}/lib"/>
+  			<copy todir="${distrib}/lib"  file="${lib}/kettle-engine-3.0.jar"/>
+  			<copy todir="${distrib}/lib"  file="${lib}/kettle-ui-swt-3.0.jar"/>
+
+  	        <!-- external libs (jdbc etc) -->
+	  		<mkdir dir="${distrib}/libext"/>
+	  		<copy todir="${distrib}/libext">
+	  			<fileset dir="${libext}" includes="**/*.jar **/*.zip" excludes="**/.vpn"/>
+	  			</copy>
+
+	        <!-- swt libs (jdbc etc) -->
+	  		<mkdir dir="${distrib}/libswt"/>
+	  		<copy todir="${distrib}/libswt">
+	  			<fileset dir="${libswt}" includes="**/*" excludes="**/.vpn **/sapjco*.dll"/>
+	  			</copy>
+
+	        <!-- plugins -->
+	  		<mkdir dir="${distrib}/plugins"/>
+	  		<copy todir="${distrib}/plugins">
+	  			<fileset dir="${plugins}" includes="**/*" excludes="**/.vpn **/sapjco.jar **/VTVLInput **/VTVLInput/*"/>
+	  			</copy>
+
+        		<!-- ui -->
+  			<mkdir dir="${distrib}/ui"/>
+  			<copy todir="${distrib}/ui">
+  				<fileset dir="${ui}" includes="**/*" excludes="**/.vpn"/>
+  				</copy>
+
+	        <!-- documentation -->
+	  		<mkdir dir="${distrib}/docs"/>
+	  		<copy todir="${distrib}/docs">
+	  			<fileset dir="${docs}" 
+	  				     includes="**/*.pdf **/*.htm **/*.html **/*.png **/*.PNG **/*.swf **/cn_ZN.zip **/*.css"
+	  			         excludes="**/*.dot **/*.doc **/*.sxw **/*.odt **/*.vpn **/*feature list*" />
+	  			</copy>
+
+	        <!-- pwd -->
+	  		<mkdir dir="${distrib}/pwd"/>
+	  		<copy todir="${distrib}/pwd">
+	  			<fileset dir="${pwd}" 
+	  				     includes="**/*.pwd"
+	  			         excludes="**/*.vpn" />
+	  			</copy>
+
+	        <!-- simple-jndi -->
+	  		<mkdir dir="${distrib}/simple-jndi"/>
+	  		<copy todir="${distrib}/simple-jndi">
+	  			<fileset dir="${simple-jndi}" 
+	  				     includes="**/*.properties"
+	  			         excludes="**/*.vpn" />
+	  			</copy>
+
+	        <!-- samples -->
+	  		<mkdir dir="${distrib}/samples"/>
+	  		<mkdir dir="${distrib}/samples/transformations"/>
+	  		<mkdir dir="${distrib}/samples/jobs"/>
+	  		<mkdir dir="${distrib}/samples/transformations/output"/>
+	  		<mkdir dir="${distrib}/samples/jobs/output"/>
+	  		<copy todir="${distrib}/samples">
+	  			<fileset dir="${samples}" 
+	  				     includes="**/*.*"
+	  				     excludes="**/.svn"/>
+	  			</copy>
+
+	        <!-- extra stuff -->
+	  		<mkdir dir="${distrib}/extra"/>
+	  		<copy todir="${distrib}/extra">
+	  			<fileset dir="${extra}" includes="**/*"/>
+	  			</copy>
+
+	  </target>
+
+	  <!--
+	       ==========================
+	             zipfile
+	       ==========================
+	  -->
+		
+	  <target name="zip" depends="distrib" description="generate the Kettle-${version}.zip file">
+	  	<echo>Generating the Kettle distribution package Kettle-${version}.zip ...</echo>
+	  	<jar jarfile="${dist.dir}/Kettle-${version}.zip" 
+	    	 basedir="${distrib}" 
+	    	 includes="**/*"
+	  	     excludes="**/Thumbs.db"
+	  		/>
+	  </target>
+
+	  <!--
+	       ==========================
+	             Source zipfile
+	       ==========================
+	  -->
+		
+	  <target name="sourcezip" depends="" description="generate the Kettle-src-${version}.zip file">
+	  	<echo>Generating the Kettle source packge zip file (Kettle-src-${version}.zip) ...</echo>
+	  	<jar jarfile="${dist.dir}/Kettle-src-${version}.zip" 
+	  		 basedir="."
+	    	 includes="**/*"
+	  	     excludes="*.zip ${classes}/**/* ${distrib}/**/* homepage/**/* Licenses/**/* ${lib}/**/* ${webstart}/**/*"
+	  		/>
+	  </target>
+
+	<!--
+	       ==========================
+	            Webstart part...
+	       ==========================
+	  -->
+
+	
+	<target name="copy2webstart" depends="init, kettle, kettle-ui" description="Copy resources to webstart">
+    	<echo>Copying resources to webstart...</echo>
+
+		<copy todir="${webstart}/libext">
+			<fileset dir="${libext}" includes="**/*.jar" excludes="mail.jar web/activation.jar"/>
+			</copy>
+
+		<copy todir="${webstart}/libswt">
+			<fileset dir="${libswt}" includes="**/*.jar" excludes="commands.jar common.jar jface.jar runtime.jar"/>
+		</copy>
+
+		<copy todir="${webstart}/">
+			<fileset dir="${bin}" includes="**/*.xml"/>
+		</copy>
+
+		<copy todir="${webstart}/lib">
+			<fileset dir="${lib}" includes="**/*.jar"/>
+		</copy>
+		
+		<copy todir="${webstart}/ui">
+			<fileset dir="${ui}" includes="**/*" excludes="**/.vpn"/>
+		</copy>
+	
+		<copy todir="${webstart}/plugins">
+			<fileset dir="${plugins}" includes="**/*"/>
+		</copy>
+
+		<copy todir="${webstart}">
+			<fileset dir="${src}/org/pentaho/di/images/" includes="kettle_logo.png"/>
+		</copy>
+
+		<jar destfile="${webstart}/libswt/win32/libs.jar">
+			<fileset dir="${libswt}/win32" includes="**/*.dll"/>
+			<fileset dir="${libswt}/win32" includes="**/*.manifest"/>
+		</jar>
+			
+		<jar destfile="${webstart}/libswt/linux/libs.jar">
+			<fileset dir="${libswt}/linux" includes="**/*.so"/>
+		</jar>
+
+		<jar destfile="${webstart}/libswt/solaris/libs.jar">
+			<fileset dir="${libswt}/solaris" includes="**/*.so"/>
+		</jar>
+
+		<jar destfile="${webstart}/libswt/aix/libs.jar">
+			<fileset dir="${libswt}/aix" includes="**/*.a"/>
+		</jar>
+
+		<jar destfile="${webstart}/libswt/osx/libs.jar">
+			<fileset dir="${libswt}/osx" includes="**/*.jnilib"/>
+			<fileset dir="${libswt}/osx" includes="**/java_swt"/>
+		</jar>
+		
+	</target>
+
+	<!---
+	
+	   src 
+	   src-ui 
+	   lib/ 
+	   libswt/win32 
+	   libswt/linux 
+	   libswt/*.jar 
+	   libext/log4j-1.2.8.jar 
+	   libext/spring 
+	   libext/commons/commons-vfs* 
+	   libext/commons/commons-logging* 
+	   ui 
+	   Translator.bat 
+	   translator.sh
+	--> 
+	
+	<target name="i18n" depends="kettle-ui" description="generate the Kettle-i18n-${version}.zip file">
+		  	<echo>Generating the Kettle i18n distribution package Kettle-i18n-${version}.zip ...</echo>
+		  	<jar jarfile="${dist.dir}/Kettle-i18n-${version}.zip" 
+		    	 basedir="." 
+		    	 includes="src/**/*.java src/**/*.properties src-ui/**/*.java src-ui/**/*.properties lib/*.jar libswt/win32/*.jar libswt/linux/x86/*.jar libswt/*.jar libext/log4j-1.2.8.jar libext/spring/spring-core.jar libext/commons/commons-vfs*.jar libext/commons/commons-logging*.jar ui/*.xul Translator.bat translator.sh translator.xml"
+		  	     excludes="**/Thumbs.db **/.svn"
+		  		/>
+	</target>
+	
+	
+	<target name="keystore" depends="copy2webstart" description="Create the keystore...">
+    	<echo>Create the keystore...</echo>
+
+		<exec executable="keytool">
+			<arg line="-genkey -keyalg RSA -alias kettle -keystore &quot;${keystore}&quot; -storepass &quot;${keystorePassword}&quot; -keypass &quot;${keystorePassword}&quot; -dname &quot;CN=Matt Casters, OU=Pentaho Corporation, O=Pentaho Data Integration, L=Orlando, S=FL, C=US&quot;"/>
+		</exec>
+	</target>
+	
+    <target name="sign-jars" depends="keystore" description="Sign all used jars">
+    	<echo>Signing JARS...</echo>
+    	
+    	<signjar keystore="${keystore}" alias="kettle" storepass="${keystorePassword}">
+    		<fileset dir="${webstart}" includes="**/*.jar"/>
+	    </signjar>
+    	<!-- for jars that are already signed by other parties, copy the originals back over -->
+
+    	<echo>Copying third-party signed jars</echo>
+    	
+		<copy todir="${webstart}/libext">
+			<fileset dir="${libext}" includes="mail.jar web/activation.jar"/>
+			</copy>
+
+		<copy todir="${webstart}/libswt">
+			<fileset dir="${libswt}" includes="commands.jar common.jar jface.jar runtime.jar"/>
+		</copy>
+    	
+    </target> 
+
+    <target name="webstart" depends="sign-jars" description="Package WAR">
+    	<echo>Create the webstart WAR file...</echo>
+
+        <war destfile="${webstart}/kettle.war" webxml="${web}/web.xml" compress="true">
+            
+        	<fileset dir="${web}">
+		      <include name="**/*.html"/>
+		      <include name="**/*.jnlp"/>
+		      <exclude name="**/*.xml"/>
+	    	</fileset>
+
+            <fileset dir="${webstart}">
+			  <include name="**/*.jar"/>
+    		  <include name="**/*.properties"/>
+			  <include name="**/repositories.xml"/>
+              <include name="**/*.xul"/>
+              <include name="images/*"/>
+  			  <include name="kettle_logo.png"/>
+              <exclude name="${keystore}"/>
+              <exclude name="kettle.war"/>
+	    	</fileset>
+        	
+        </war>
+	</target>
+
+	<!--
+	       ===========================================
+	          tests : junit core tests
+	       ============================================
+	  -->
+	<target name="tests-core" depends="compileTests" description="Execute the core tests">
+		
+		<junit printsummary="no" fork="yes" forkmode="perTest" jvm="java" maxmemory="512M" showoutput="yes">
+	    	<classpath>
+				<fileset dir="${lib}" includes="kettle-engine-3.0.jar"/>
+				<fileset dir="test/libext/" includes="kettle.jar"/>
+	    		<pathelement path="${testClasses}"/>
+
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libswt}/win32/" includes="*.jar *.zip"/>
+			</classpath>
+			
+			<formatter type="xml"/>
+			
+		  	<test todir="${junit}" name="org.pentaho.di.core.database.DatabaseTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.core.row.RowDataUtilTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.core.row.RowTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.core.row.ValueDataUtilTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.core.RowSetTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.blackbox.BlackBoxTests.java" haltonerror="false" />
+			
+		</junit>
+	</target>
+
+	<!--
+	       ===========================================
+	         	tests : junit resource tests
+	       ============================================
+	  -->
+	<target name="tests-resource" depends="compileTests" description="Execute the resource tests">
+		
+		<junit printsummary="no" fork="yes" forkmode="perTest" jvm="java" maxmemory="512M" showoutput="yes">
+	    	<classpath>
+				<fileset dir="${lib}" includes="kettle-engine-3.0.jar"/>
+				<fileset dir="test/libext/" includes="kettle.jar"/>
+	    		<pathelement path="${testClasses}"/>
+
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libswt}/win32/" includes="*.jar *.zip"/>
+			</classpath>
+			
+			<formatter type="xml"/>
+			
+		  	<test todir="${junit}" name="org.pentaho.di.resource.ResourceExportTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.resource.ResourceDependencyTest" haltonerror="false" />
+			
+		</junit>
+	</target>
+
+	<!--
+	       ===========================================
+	         	tests : junit transformation tests
+	       ============================================
+	  -->
+	<target name="tests-trans" depends="compileTests" description="Execute the transformation tests">
+		
+		<junit printsummary="no" fork="yes" forkmode="perTest" jvm="java" maxmemory="512M" showoutput="yes">
+	    	<classpath>
+				<fileset dir="${lib}" includes="kettle-engine-3.0.jar"/>
+				<fileset dir="test/libext/" includes="kettle.jar"/>
+	    		<pathelement path="${testClasses}"/>
+
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libswt}/win32/" includes="*.jar *.zip"/>
+			</classpath>
+			
+			<formatter type="xml"/>
+			
+		  	<test todir="${junit}" name="org.pentaho.di.trans.HopTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.trans.steps.append.AppendTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.trans.steps.blockingstep.BlockingStepTest" haltonerror="false" />
+  			<test todir="${junit}" name="org.pentaho.di.trans.steps.combinationlookup.CombinationLookupTest" haltonerror="false" />
+  			<test todir="${junit}" name="org.pentaho.di.trans.steps.injector.InjectorTest" haltonerror="false" />
+  			<test todir="${junit}" name="org.pentaho.di.trans.steps.mapping.RunMapping" haltonerror="false" />
+  			<test todir="${junit}" name="org.pentaho.di.trans.steps.rowgenerator.RowGeneratorTest" haltonerror="false" />
+  			<test todir="${junit}" name="org.pentaho.di.trans.steps.sort.SortRowsTest" haltonerror="false" />
+		  	<test todir="${junit}" name="org.pentaho.di.trans.steps.valuemapper.ValueMapperTest" haltonerror="false" />
+
+		</junit>
+	</target>
+
+	<!--
+	       ===========================================
+	          tests : junit performance tests
+	       ============================================
+	  -->
+
+	<target name="tests-run" depends="compileTests" description="Execute the run performance tests">
+		
+		<junit printsummary="no" fork="yes" forkmode="perTest" jvm="java" maxmemory="512M" showoutput="yes">
+	    	<classpath>
+				<fileset dir="${lib}" includes="kettle-engine-3.0.jar"/>
+				<fileset dir="test/libext/" includes="kettle.jar"/>
+				<!-- fileset dir="test/libext/" includes="junit.jar"/ -->
+	    		<pathelement path="${testClasses}"/>
+
+				<fileset dir="${libext}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libext}/"	    includes="**/*.jar *.zip"/>
+				<fileset dir="${libswt}" 		includes="*.jar *.zip"/>
+				<fileset dir="${libswt}/win32/" includes="*.jar *.zip"/>
+			</classpath>
+			
+			<formatter type="xml"/>
+			
+		  	<test todir="${junit}" name="org.pentaho.di.run.tableoutput.RunTableOutput" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.abort.RunAbort" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence4To10" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence4To05" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence4To00" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence2To10" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence2To05" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence2To00" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence1To10" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence1To05" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.addsequence.RunAddSequence1To00" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.calculator.RunCalculator" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.constant.RunConstant" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.filterrows.RunFilterRows" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.rowgenerator.RunRowGenerator" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.selectvalues.RunSelectValues" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.sortrows.RunSortRows" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.streamlookup.RunStreamLookup" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.systemdata.RunSystemData" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.tableinput.RunTableInput" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.textfileinput.RunTextFileInput" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.textfileoutput.RunTextFileOutput" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.uniquerows.RunUniqueRows" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.databaselookup.RunDatabaseLookup" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.dimensionlookup.RunDimensionLookup" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.excelinput.RunExcelInput" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.exceloutput.RunCombinationLookup" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.scriptvalues_mod.RunScriptValuesMod" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.joinrows.RunJoinRows" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.update.RunUpdate" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.insertupdate.RunInsertUpdate" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.delete.RunDelete" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.getfilenames.RunGetFileNames" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.groupby.RunGroupBy" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.mergejoin.RunMergeJoin" haltonerror="false" />
+			<test todir="${junit}" name="org.pentaho.di.run.sortedmerge.RunSortedMerge" haltonerror="false" />
+			
+		</junit>
+	</target>
+	
+	<!--
+	       ==========================
+	          Default target: all
+	       ==========================
+	  -->
+
+	<target name="default" depends="distrib" description="default = build distribution package"/>
+
+	<!--
+	       ==========================
+	              C L E A N
+	       ==========================
+	  -->
+
+	  <target name="cleandirs" description="clean up generated files">
+	    <delete dir="${classes}"/>
+	    <delete dir="${classes-ui}"/>
+	    <delete dir="${lib}"/>
+	    <delete dir="${distrib}"/>
+	  	<delete dir="${api}"/>
+	  	<delete dir="${webstart}"/>
+	  	<delete dir="libvars"/>
+	  	<delete dir="test/derbyOld"/>
+	  	<delete dir="test/derbyNew"/>
+	  	<delete>
+	        <fileset dir=".">
+			  <include name="*.zip"/>
+	    	</fileset>
+	  	</delete>
+	    <delete dir="${macdistrib}"/>
+	  </target>
+
+	  <target name="clean" depends="cleandirs"/>
+	
+	 <target name="coverage" depends="clean, compileTests" > <!-- , tests-core, tests-resource, tests-trans, tests-run -->
+	 	<ant antfile="build_coverage.xml" dir="." target="coverage" />
+	 </target>
+	
+	 <target name="nightly" depends="clean, zip, sourcezip, javadoc_zip, compileTests" > <!-- , tests-core, tests-resource, tests-trans, tests-run -->
+	 	<ant antfile="build_coverage.xml" dir="." target="zip-reports" />
+	 </target>
+	
+	<!--
+		BEFORE USING : Please download JarBundler version 1.9 and unzip it in tools/libant/
+		http://informagen.com/JarBundler/	
+	-->
+	
+	<target name="macapplication" depends="distrib" description="Build OS X executable">
+		
+	  	        <delete dir="${macdistrib}/${ant.project.name}.app"/>
+	  	        <taskdef name="jarbundler"
+	  	                 classpath="${jarbundler.jar}"
+	  	                 classname="net.sourceforge.jarbundler.JarBundler"/>
+	  	        <jarbundler dir="${macdistrib}"
+	  	                    name="${ant.project.name}"
+	  	                    mainclass="org.pentaho.di.ui.spoon.Spoon"
+	  	                    icon="${ui}/images/spoon32.icns"
+	  	                    version="${version}"
+	  	        			verbose="true"
+	  	        	VMOptions="-Xmx256m"
+				    shortname="Spoon"
+	  	        	arguments=""
+	  	        	workingdirectory="$APP_PACKAGE/Contents/Resources"
+	  	            jvmversion="1.5+">
+	  	        	<javaproperty name="java.library.path" value="$APP_PACKAGE/Contents/Resources"/>
+	  	        	<jarfileset dir="${distrib}">
+	  	                <include name="${lib}/*.jar"/>
+	  	        		<include name="${libext}/*.jar"/>
+	  	        		<include name="${libext}/**/*.jar"/>
+	  	        		<include name="${libswt}/*.jar"/>
+	  	        		<include name="${libswt}/osx/*.jar"/>
+	  	        		<include name="${libswt}/osx/java_swt"/>
+	  	        		<include name="${samples}/**/*"/>
+	  	        		<include name="${docs}/**/*"/>
+	  	        		<include name="README_FIRST.txt"/>
+	  	        		<include name="README_OSX.txt"/>
+	  	        		<include name="*.sh"/>
+	  	        		<include name="simple-jndi/**/*"/>
+	  	        		<include name="pwd/**/*"/>
+	  	        		<include name="plugins/**/*"/>
+	  	        	</jarfileset>
+	  	        </jarbundler>
+	  			<!-- patch Info.plist with StartOnMainTrhead property need to make sure that the token is in the right place-->
+	  			<replace file="${macdistrib}/${ant.project.name}.app/Contents/Info.plist" token="&lt;key&gt;ClassPath" value="&lt;key&gt;StartOnMainThread&lt;/key&gt;&lt;true/&gt; &lt;key&gt;ClassPath" />
+	  			<!-- Create a .dmg file containing the app and docs -->
+	  		    <exec executable="/usr/bin/hdiutil" os="Mac OS X">
+	  		      <arg value="create"/>
+	  		      <arg value="-srcfolder"/>
+	  		      <arg value="${macdistrib}"/>
+	  		      <arg value="-volname"/>
+	  		      <arg value="${ant.project.name} ${version}"/>
+	  		      <arg value="-ov"/>
+	  		      <arg value="${macdistrib}/${ant.project.name}-${version}.dmg"/>
+	  		    </exec>
+	  	    </target>
+	
+
+</project>
